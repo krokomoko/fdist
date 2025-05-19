@@ -10,7 +10,7 @@ import (
 type Class struct {
 	values      []float64 // список, по которому идёт сравнение
 	__valuesSum []float64 // список, существующий только для обучения
-	ymu         []float64 // список средних значений степеней принадлежности (распределение)
+	Ymu         []float64 // список средних значений степеней принадлежности (распределение)
 	count       float64   // количество строк из обучающей выборки, подходящих классу
 }
 
@@ -67,8 +67,8 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 	}
 
 	for ci := range distribution.classes {
-		for yi := range distribution.classes[ci].ymu {
-			distribution.classes[ci].ymu[yi] /= distribution.classes[ci].count
+		for yi := range distribution.classes[ci].Ymu {
+			distribution.classes[ci].Ymu[yi] /= distribution.classes[ci].count
 		}
 
 		for vi := range distribution.classes[ci].__valuesSum {
@@ -90,7 +90,7 @@ func (dist *Distribution) addClass(data []float64) *Class {
 	class := Class{
 		values:      make([]float64, dataLen),
 		__valuesSum: make([]float64, dataLen),
-		ymu:         make([]float64, len(dist.Parameters[dist.cInd].Words)),
+		Ymu:         make([]float64, len(dist.Parameters[dist.cInd].Words)),
 		count:       1,
 	}
 
@@ -99,7 +99,7 @@ func (dist *Distribution) addClass(data []float64) *Class {
 
 	for wi, word := range dist.Parameters[dist.cInd].Words {
 		mu, _ = word.Mu(data[dist.cInd])
-		class.ymu[wi] += mu
+		class.Ymu[wi] += mu
 	}
 
 	dist.classes = append(dist.classes, class)
@@ -111,7 +111,7 @@ func (dist *Distribution) addValue(class *Class, values []float64, value float64
 	var mu float64
 	for wi, word := range dist.Parameters[dist.cInd].Words {
 		mu, _ = word.Mu(value)
-		class.ymu[wi] += mu
+		class.Ymu[wi] += mu
 	}
 
 	for vi := range class.__valuesSum {
@@ -171,5 +171,5 @@ func (dist *Distribution) Mean(class *Class) (float64, error) {
 		return 0.0, fmt.Errorf("Class pointer is nil")
 	}
 
-	return dist.Parameters[dist.cInd].Value(class.ymu)
+	return dist.Parameters[dist.cInd].Value(class.Ymu)
 }
