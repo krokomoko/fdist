@@ -15,9 +15,9 @@ type Class struct {
 }
 
 type Distribution struct {
-	classes    []Class
-	cInd       int // индекс зависимого значения (параметра)
+	Classes    []Class
 	Parameters []fuzzy.Parameter
+	cInd       int // индекс зависимого значения (параметра)
 }
 
 func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistance float64) Distribution {
@@ -29,7 +29,7 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 
 	var (
 		distribution = Distribution{
-			classes:    []Class{},
+			Classes:    []Class{},
 			Parameters: make([]fuzzy.Parameter, len(data[0])),
 			cInd:       len(data[0]) - 1,
 		}
@@ -66,16 +66,16 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 		}
 	}
 
-	for ci := range distribution.classes {
-		for yi := range distribution.classes[ci].Ymu {
-			distribution.classes[ci].Ymu[yi] /= distribution.classes[ci].count
+	for ci := range distribution.Classes {
+		for yi := range distribution.Classes[ci].Ymu {
+			distribution.Classes[ci].Ymu[yi] /= distribution.Classes[ci].count
 		}
 
-		for vi := range distribution.classes[ci].__valuesSum {
-			distribution.classes[ci].values[vi] =
-				distribution.classes[ci].__valuesSum[vi] / distribution.classes[ci].count
+		for vi := range distribution.Classes[ci].__valuesSum {
+			distribution.Classes[ci].values[vi] =
+				distribution.Classes[ci].__valuesSum[vi] / distribution.Classes[ci].count
 		}
-		distribution.classes[ci].__valuesSum = []float64{}
+		distribution.Classes[ci].__valuesSum = []float64{}
 	}
 
 	return distribution
@@ -102,9 +102,9 @@ func (dist *Distribution) addClass(data []float64) *Class {
 		class.Ymu[wi] += mu
 	}
 
-	dist.classes = append(dist.classes, class)
+	dist.Classes = append(dist.Classes, class)
 
-	return &dist.classes[len(dist.classes)-1]
+	return &dist.Classes[len(dist.Classes)-1]
 }
 
 func (dist *Distribution) addValue(class *Class, values []float64, value float64) {
@@ -151,7 +151,7 @@ func (dist *Distribution) GetClass(data []float64, classDistance float64) (*Clas
 		minInd   int = -1
 	)
 
-	for classInd, class := range dist.classes {
+	for classInd, class := range dist.Classes {
 		distance = dist.distance(&class, data)
 		if distance <= classDistance && distance < min {
 			min = distance
@@ -163,7 +163,7 @@ func (dist *Distribution) GetClass(data []float64, classDistance float64) (*Clas
 		return nil, fmt.Errorf("No matching data class")
 	}
 
-	return &dist.classes[minInd], nil
+	return &dist.Classes[minInd], nil
 }
 
 func (dist *Distribution) Mean(class *Class) (float64, error) {
