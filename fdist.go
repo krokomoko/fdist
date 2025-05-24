@@ -229,7 +229,6 @@ func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64)
 		if _to > _from {
 			//p += class.Ymu[wordInd] * (_to - _from) / (word.Max - word.Min)
 			p += class.Ymu[wordInd]
-			fmt.Println(wordInd, "n", _from, _to, class.Ymu[wordInd]*(_to-_from)/(word.Max-word.Min), p)
 		}
 
 		// вероятность персечения значений текущего слова и следующего
@@ -252,7 +251,6 @@ func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64)
 				p += _mx * (_to - _from) / _d
 				//p += __max(class.Ymu[wordInd], class.Ymu[wordInd+1]) * (_to - _from) / d
 				//p += 0.5 * (class.Ymu[wordInd] + class.Ymu[wordInd+1]) * (_to - _from) / d
-				fmt.Println(wordInd, "o", _from, _to, __max(class.Ymu[wordInd], class.Ymu[wordInd+1])*(_to-_from)/d, p)
 			}
 		}
 	}
