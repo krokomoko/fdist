@@ -1,23 +1,25 @@
 package fdist
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/krokomoko/fuzzy"
 )
 
 type Class struct {
-	values      []float64 // список, по которому идёт сравнение
+	Values      []float64 `json:"values"` // список, по которому идёт сравнение
 	__valuesSum []float64 // список, существующий только для обучения
-	Ymu         []float64 // список средних значений степеней принадлежности (распределение)
-	count       float64   // количество строк из обучающей выборки, подходящих классу
+	Ymu         []float64 `json:"ymu"`   // список средних значений степеней принадлежности (распределение)
+	Count       float64   `json:"count"` // количество строк из обучающей выборки, подходящих классу
 }
 
 type Distribution struct {
-	Classes    []Class
-	Parameters []fuzzy.Parameter
-	cInd       int // индекс зависимого значения (параметра)
+	Classes    []Class           `json:"classes"`
+	Parameters []fuzzy.Parameter `json:"parameters"`
+	cInd       int               // индекс зависимого значения (параметра)
 }
 
 func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistance float64) Distribution {
@@ -68,12 +70,12 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 
 	for ci := range distribution.Classes {
 		for yi := range distribution.Classes[ci].Ymu {
-			distribution.Classes[ci].Ymu[yi] /= distribution.Classes[ci].count
+			distribution.Classes[ci].Ymu[yi] /= distribution.Classes[ci].Count
 		}
 
 		for vi := range distribution.Classes[ci].__valuesSum {
-			distribution.Classes[ci].values[vi] =
-				distribution.Classes[ci].__valuesSum[vi] / distribution.Classes[ci].count
+			distribution.Classes[ci].Values[vi] =
+				distribution.Classes[ci].__valuesSum[vi] / distribution.Classes[ci].Count
 		}
 		distribution.Classes[ci].__valuesSum = []float64{}
 	}
@@ -88,13 +90,13 @@ func (dist *Distribution) addClass(data []float64) *Class {
 	)
 
 	class := Class{
-		values:      make([]float64, dataLen),
+		Values:      make([]float64, dataLen),
 		__valuesSum: make([]float64, dataLen),
 		Ymu:         make([]float64, len(dist.Parameters[dist.cInd].Words)),
-		count:       1,
+		Count:       1,
 	}
 
-	copy(class.values, data)
+	copy(class.Values, data)
 	copy(class.__valuesSum, data)
 
 	for wi, word := range dist.Parameters[dist.cInd].Words {
@@ -118,7 +120,7 @@ func (dist *Distribution) addValue(class *Class, values []float64, value float64
 		class.__valuesSum[vi] += values[vi]
 	}
 
-	class.count += 1
+	class.Count += 1
 }
 
 func (dist *Distribution) distance(class *Class, values []float64) float64 {
@@ -134,7 +136,7 @@ func (dist *Distribution) distance(class *Class, values []float64) float64 {
 
 		for _, word := range parameter.Words {
 			mu1, _ = word.Mu(values[pi])
-			mu2, _ = word.Mu(class.values[pi])
+			mu2, _ = word.Mu(class.Values[pi])
 			sum += math.Abs(mu1 - mu2)
 		}
 
@@ -172,4 +174,127 @@ func (dist *Distribution) Mean(class *Class) (float64, error) {
 	}
 
 	return dist.Parameters[dist.cInd].Value(class.Ymu)
+}
+
+func __min(a, b float64) float64 {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func __max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// только для версии fuzzy до 0642ac98b0f620b18b62ebc8c39c233d9555fd86
+func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64) {
+	var (
+		_from, _to float64
+		_mx, _d    float64
+
+		d           = to - from
+		lastWordInd = len(class.Ymu) - 1
+	)
+
+	if d <= 0 {
+		panic("from >= to")
+	}
+
+	for wordInd, word := range dist.Parameters[dist.cInd].Words {
+		if word.Min >= to {
+			break
+		}
+		if word.Max <= from {
+			continue
+		}
+
+		// вычисление по текущему
+		// + вычисление по пересечению со следующим
+
+		// вероятность значений текущего слова
+		_from = __max(word.Min, from)
+		if wordInd > 0 {
+			// prev
+			_from = __max(dist.Parameters[dist.cInd].Words[wordInd-1].Max, _from)
+		}
+		_to = __min(word.Max, to)
+		if wordInd < lastWordInd {
+			// next
+			_to = __min(_to, dist.Parameters[dist.cInd].Words[wordInd+1].Min)
+		}
+		if _to > _from {
+			//p += class.Ymu[wordInd] * (_to - _from) / (word.Max - word.Min)
+			p += class.Ymu[wordInd]
+			fmt.Println(wordInd, "n", _from, _to, class.Ymu[wordInd]*(_to-_from)/(word.Max-word.Min), p)
+		}
+
+		// вероятность персечения значений текущего слова и следующего
+		if wordInd < lastWordInd {
+			// next
+			_from = __max(dist.Parameters[dist.cInd].Words[wordInd+1].Min, from)
+			_to = __min(word.Max, to)
+
+			if _to > _from {
+				_mx = __max(class.Ymu[wordInd], class.Ymu[wordInd+1])
+				if _mx == class.Ymu[wordInd] {
+					_d =
+						dist.Parameters[dist.cInd].Words[wordInd].Max -
+							dist.Parameters[dist.cInd].Words[wordInd].Min
+				} else {
+					_d =
+						dist.Parameters[dist.cInd].Words[wordInd+1].Max -
+							dist.Parameters[dist.cInd].Words[wordInd+1].Min
+				}
+				p += _mx * (_to - _from) / _d
+				//p += __max(class.Ymu[wordInd], class.Ymu[wordInd+1]) * (_to - _from) / d
+				//p += 0.5 * (class.Ymu[wordInd] + class.Ymu[wordInd+1]) * (_to - _from) / d
+				fmt.Println(wordInd, "o", _from, _to, __max(class.Ymu[wordInd], class.Ymu[wordInd+1])*(_to-_from)/d, p)
+			}
+		}
+	}
+
+	return
+}
+
+func (dist *Distribution) Save(filename string) (err error) {
+	var output []byte
+
+	output, err = json.Marshal(dist)
+	if err != nil {
+		err = fmt.Errorf("Ошибка сериализация данных: %w", err)
+		return
+	}
+
+	err = os.WriteFile(filename, output, 0666)
+	if err != nil {
+		err = fmt.Errorf("Ошибка записи данных в файл: %w", err)
+	}
+
+	return
+}
+
+func Load(filename string) (dist *Distribution, err error) {
+	var content []byte
+
+	content, err = os.ReadFile(filename)
+	if err != nil {
+		err = fmt.Errorf("Ошибка чтения файла: %w", err)
+		return
+	}
+
+	dist = &Distribution{}
+
+	err = json.Unmarshal(content, dist)
+	if err != nil {
+		err = fmt.Errorf("Ошибка десериализации данных: %w", err)
+		return
+	}
+
+	dist.cInd = len(dist.Parameters) - 1
+
+	return
 }
