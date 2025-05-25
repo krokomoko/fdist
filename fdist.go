@@ -176,20 +176,6 @@ func (dist *Distribution) Mean(class *Class) (float64, error) {
 	return dist.Parameters[dist.cInd].Value(class.Ymu)
 }
 
-func __min(a, b float64) float64 {
-	if a > b {
-		return b
-	}
-	return a
-}
-
-func __max(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // только для версии fuzzy до 0642ac98b0f620b18b62ebc8c39c233d9555fd86
 func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64) {
 	var (
@@ -216,15 +202,15 @@ func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64)
 		// + вычисление по пересечению со следующим
 
 		// вероятность значений текущего слова
-		_from = __max(word.Min, from)
+		_from = max(word.Min, from)
 		if wordInd > 0 {
 			// prev
-			_from = __max(dist.Parameters[dist.cInd].Words[wordInd-1].Max, _from)
+			_from = max(dist.Parameters[dist.cInd].Words[wordInd-1].Max, _from)
 		}
-		_to = __min(word.Max, to)
+		_to = min(word.Max, to)
 		if wordInd < lastWordInd {
 			// next
-			_to = __min(_to, dist.Parameters[dist.cInd].Words[wordInd+1].Min)
+			_to = min(_to, dist.Parameters[dist.cInd].Words[wordInd+1].Min)
 		}
 		if _to > _from {
 			//p += class.Ymu[wordInd] * (_to - _from) / (word.Max - word.Min)
@@ -234,11 +220,11 @@ func (dist *Distribution) ProbFromTo(class *Class, from, to float64) (p float64)
 		// вероятность персечения значений текущего слова и следующего
 		if wordInd < lastWordInd {
 			// next
-			_from = __max(dist.Parameters[dist.cInd].Words[wordInd+1].Min, from)
-			_to = __min(word.Max, to)
+			_from = max(dist.Parameters[dist.cInd].Words[wordInd+1].Min, from)
+			_to = min(word.Max, to)
 
 			if _to > _from {
-				_mx = __max(class.Ymu[wordInd], class.Ymu[wordInd+1])
+				_mx = max(class.Ymu[wordInd], class.Ymu[wordInd+1])
 				if _mx == class.Ymu[wordInd] {
 					_d =
 						dist.Parameters[dist.cInd].Words[wordInd].Max -
