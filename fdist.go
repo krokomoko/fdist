@@ -64,18 +64,23 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 			if i == j {
 				continue
 			}
+
 			if distance, ok = distances[i][j]; ok {
 				if distance <= classDistance {
 					distribution.addValue(class, data[j][:rowLen], data[j][rowLen])
 				}
 				continue
 			}
-			if distance = distribution.distance(class.Values, data[j][:rowLen]); distance <= classDistance {
+
+			if _, ok = distances[j]; !ok {
+				distances[j] = make(map[int]float32)
+			}
+
+			distance = distribution.distance(class.Values, data[j][:rowLen])
+			distances[j][i] = distance
+
+			if distance <= classDistance {
 				distribution.addValue(class, data[j][:rowLen], data[j][rowLen])
-				if _, ok = distances[j]; !ok {
-					distances[j] = make(map[int]float32)
-				}
-				distances[j][i] = distance
 			}
 		}
 	}
