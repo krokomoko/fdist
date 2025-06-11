@@ -61,7 +61,10 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 		class = distribution.addClass(data[i])
 
 		for j := range data {
-			if distance, ok = distances[j][i]; ok {
+			if i == j {
+				continue
+			}
+			if distance, ok = distances[i][j]; ok {
 				if distance <= classDistance {
 					distribution.addValue(class, data[j][:rowLen], data[j][rowLen])
 				}
