@@ -1,26 +1,26 @@
 package fdist
 
 type List struct {
-	start *Node
-	end   *Node
+	Start *Node
+	End   *Node
 }
 
 type Node struct {
-	value *Class
-	prev  *Node
-	next  *Node
+	Value *Class
+	Prev  *Node
+	Next  *Node
 }
 
 func (l *List) add(class *Class) {
 	node := &Node{
-		value: class,
+		Value: class,
 	}
-	if l.end == nil {
-		l.start = node
-		l.end = node
+	if l.End == nil {
+		l.Start = node
+		l.End = node
 	} else {
-		node.prev = l.end
-		l.end.next = node
-		l.end = l.end.next
+		node.Prev = l.End
+		l.End.Next = node
+		l.End = l.End.Next
 	}
 }

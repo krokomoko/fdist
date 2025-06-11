@@ -83,28 +83,28 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 	// вычисление средних значений для определения
 	// распределения искомой величины и класса,
 	// соответствующего предоставленным данным
-	classNode := distribution.Classes.start
+	classNode := distribution.Classes.Start
 	for classNode != nil {
-		count := classNode.value.Count
-		for yi := range classNode.value.Ymu {
-			classNode.value.Ymu[yi] /= count
+		count := classNode.Value.Count
+		for yi := range classNode.Value.Ymu {
+			classNode.Value.Ymu[yi] /= count
 		}
-		for vi := range classNode.value.__valuesSum {
-			classNode.value.Values[vi] =
-				classNode.value.__valuesSum[vi] / count
+		for vi := range classNode.Value.__valuesSum {
+			classNode.Value.Values[vi] =
+				classNode.Value.__valuesSum[vi] / count
 		}
-		clear(classNode.value.__valuesSum)
-		classNode = classNode.next
+		clear(classNode.Value.__valuesSum)
+		classNode = classNode.Next
 	}
 
 	// мерждинг классов
-	for ci := distribution.Classes.start; ci != nil; ci = ci.next {
-		for cj := ci.next; cj != nil; cj = cj.next {
-			if distribution.distance(ci.value.Values, cj.value.Values) <= classDistance {
-				distribution.mergeClasses(ci.value, cj.value)
-				cj.prev.next = cj.next
-				if cj.next != nil {
-					cj.next.prev = cj.prev
+	for ci := distribution.Classes.Start; ci != nil; ci = ci.Next {
+		for cj := ci.Next; cj != nil; cj = cj.Next {
+			if distribution.distance(ci.Value.Values, cj.Value.Values) <= classDistance {
+				distribution.mergeClasses(ci.Value, cj.Value)
+				cj.Prev.Next = cj.Next
+				if cj.Next != nil {
+					cj.Next.Prev = cj.Prev
 				}
 			}
 		}
@@ -193,11 +193,11 @@ func (dist *Distribution) GetClass(data []float64, classDistance float32) (*Clas
 		min      float32 = math.MaxFloat32
 	)
 
-	for node := dist.Classes.start; node != nil; node = node.next {
-		distance = dist.distance(node.value.Values, data)
+	for node := dist.Classes.Start; node != nil; node = node.Next {
+		distance = dist.distance(node.Value.Values, data)
 		if distance <= classDistance && distance < min {
 			min = distance
-			result = node.value
+			result = node.Value
 		}
 	}
 
