@@ -17,12 +17,12 @@ type Class struct {
 }
 
 type Distribution struct {
-	Classes    []Class           `json:"classes"`
+	Classes    List              `json:"classes"`
 	Parameters []fuzzy.Parameter `json:"parameters"`
 	cInd       int               // индекс зависимого значения (параметра)
 }
 
-func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistance float64) Distribution {
+func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistance float32) Distribution {
 	var dataLen = len(data)
 
 	if dataLen == 0 {
@@ -31,56 +31,93 @@ func NewDistribution(data [][]float64, wordsCount, yWordsCount int, classDistanc
 
 	var (
 		distribution = Distribution{
-			Classes:    []Class{},
+			Classes:    List{},
 			Parameters: make([]fuzzy.Parameter, len(data[0])),
 			cInd:       len(data[0]) - 1,
 		}
-		class      *Class
-		values     = make([]float64, dataLen)
-		classified = make(map[int]bool)
-		ok         bool
-		rowLen     = len(data[0]) - 1
+		values = make([]float64, dataLen)
+		rowLen = len(data[0]) - 1
 	)
 
-	for i := range distribution.Parameters[:rowLen] {
+	for i := range rowLen + 1 {
 		for j, row := range data {
 			values[j] = row[i]
 		}
+		if i == rowLen {
+			wordsCount = yWordsCount
+		}
 		distribution.Parameters[i] = fuzzy.NewParameter(values, wordsCount)
 	}
-	for j, row := range data {
-		values[j] = row[rowLen]
-	}
-	distribution.Parameters[rowLen] = fuzzy.NewParameter(values, yWordsCount)
 
+	// TODO: обойти повторное вычисление расстояний
+	// TODO: способы оптимизации??????
+	var (
+		class     *Class
+		distance  float32
+		ok        bool
+		distances = make(map[int]map[int]float32)
+	)
 	for i := range data {
-		if _, ok = classified[i]; ok {
-			continue
-		}
-
 		class = distribution.addClass(data[i])
 
-		for j := i + 1; j < dataLen; j++ {
-			if distribution.distance(class, data[j][:rowLen]) <= classDistance {
+		for j := range data {
+			if distance, ok = distances[j][i]; ok {
+				if distance <= classDistance {
+					distribution.addValue(class, data[j][:rowLen], data[j][rowLen])
+				}
+				continue
+			}
+			if distance = distribution.distance(class.Values, data[j][:rowLen]); distance <= classDistance {
 				distribution.addValue(class, data[j][:rowLen], data[j][rowLen])
-				classified[j] = true
+				if _, ok = distances[j]; !ok {
+					distances[j] = make(map[int]float32)
+				}
+				distances[j][i] = distance
 			}
 		}
 	}
 
-	for ci := range distribution.Classes {
-		for yi := range distribution.Classes[ci].Ymu {
-			distribution.Classes[ci].Ymu[yi] /= distribution.Classes[ci].Count
+	// вычисление средних значений для определения
+	// распределения искомой величины и класса,
+	// соответствующего предоставленным данным
+	classNode := distribution.Classes.start
+	for classNode != nil {
+		count := classNode.value.Count
+		for yi := range classNode.value.Ymu {
+			classNode.value.Ymu[yi] /= count
 		}
+		for vi := range classNode.value.__valuesSum {
+			classNode.value.Values[vi] =
+				classNode.value.__valuesSum[vi] / count
+		}
+		clear(classNode.value.__valuesSum)
+		classNode = classNode.next
+	}
 
-		for vi := range distribution.Classes[ci].__valuesSum {
-			distribution.Classes[ci].Values[vi] =
-				distribution.Classes[ci].__valuesSum[vi] / distribution.Classes[ci].Count
+	// мерждинг классов
+	for ci := distribution.Classes.start; ci != nil; ci = ci.next {
+		for cj := ci.next; cj != nil; cj = cj.next {
+			if distribution.distance(ci.value.Values, cj.value.Values) <= classDistance {
+				distribution.mergeClasses(ci.value, cj.value)
+				cj.prev.next = cj.next
+				if cj.next != nil {
+					cj.next.prev = cj.prev
+				}
+			}
 		}
-		distribution.Classes[ci].__valuesSum = []float64{}
 	}
 
 	return distribution
+}
+
+func (dist *Distribution) mergeClasses(c1, c2 *Class) {
+	for i := range c1.Values {
+		c1.Values[i] = (c1.Values[i] + c2.Values[i]) / 2.0
+	}
+
+	for i := range c1.Ymu {
+		c1.Ymu[i] = (c1.Ymu[i] + c2.Ymu[i]) / 2.0
+	}
 }
 
 func (dist *Distribution) addClass(data []float64) *Class {
@@ -104,9 +141,9 @@ func (dist *Distribution) addClass(data []float64) *Class {
 		class.Ymu[wi] += mu
 	}
 
-	dist.Classes = append(dist.Classes, class)
+	dist.Classes.add(&class)
 
-	return &dist.Classes[len(dist.Classes)-1]
+	return &class
 }
 
 func (dist *Distribution) addValue(class *Class, values []float64, value float64) {
@@ -123,7 +160,7 @@ func (dist *Distribution) addValue(class *Class, values []float64, value float64
 	class.Count += 1
 }
 
-func (dist *Distribution) distance(class *Class, values []float64) float64 {
+func (dist *Distribution) distance(v1, v2 []float64) float32 {
 	var sum, tSum, wCount, mu1, mu2 float64
 
 	for pi, parameter := range dist.Parameters[:dist.cInd] {
@@ -135,37 +172,37 @@ func (dist *Distribution) distance(class *Class, values []float64) float64 {
 		sum = 0
 
 		for _, word := range parameter.Words {
-			mu1, _ = word.Mu(values[pi])
-			mu2, _ = word.Mu(class.Values[pi])
+			mu1, _ = word.Mu(v1[pi])
+			mu2, _ = word.Mu(v2[pi])
 			sum += math.Abs(mu1 - mu2)
 		}
 
 		tSum += sum / wCount
 	}
 
-	return tSum / float64(len(dist.Parameters))
+	return float32(tSum) / float32(len(dist.Parameters))
 }
 
-func (dist *Distribution) GetClass(data []float64, classDistance float64) (*Class, error) {
+func (dist *Distribution) GetClass(data []float64, classDistance float32) (*Class, error) {
 	var (
-		distance float64
-		min          = math.MaxFloat64
-		minInd   int = -1
+		result   *Class
+		distance float32
+		min      float32 = math.MaxFloat32
 	)
 
-	for classInd, class := range dist.Classes {
-		distance = dist.distance(&class, data)
+	for node := dist.Classes.start; node != nil; node = node.next {
+		distance = dist.distance(node.value.Values, data)
 		if distance <= classDistance && distance < min {
 			min = distance
-			minInd = classInd
+			result = node.value
 		}
 	}
 
-	if minInd == -1 {
-		return nil, fmt.Errorf("No matching data class")
+	if result == nil {
+		return nil, fmt.Errorf("нет подходящего класса")
 	}
 
-	return &dist.Classes[minInd], nil
+	return result, nil
 }
 
 func (dist *Distribution) Mean(class *Class) (float64, error) {
@@ -249,13 +286,13 @@ func (dist *Distribution) Save(filename string) (err error) {
 
 	output, err = json.Marshal(dist)
 	if err != nil {
-		err = fmt.Errorf("Ошибка сериализация данных: %w", err)
+		err = fmt.Errorf("ошибка сериализация данных: %w", err)
 		return
 	}
 
 	err = os.WriteFile(filename, output, 0666)
 	if err != nil {
-		err = fmt.Errorf("Ошибка записи данных в файл: %w", err)
+		err = fmt.Errorf("ошибка записи данных в файл: %w", err)
 	}
 
 	return
@@ -266,7 +303,7 @@ func Load(filename string) (dist *Distribution, err error) {
 
 	content, err = os.ReadFile(filename)
 	if err != nil {
-		err = fmt.Errorf("Ошибка чтения файла: %w", err)
+		err = fmt.Errorf("ошибка чтения файла: %w", err)
 		return
 	}
 
@@ -274,7 +311,7 @@ func Load(filename string) (dist *Distribution, err error) {
 
 	err = json.Unmarshal(content, dist)
 	if err != nil {
-		err = fmt.Errorf("Ошибка десериализации данных: %w", err)
+		err = fmt.Errorf("ошибка десериализации данных: %w", err)
 		return
 	}
 
