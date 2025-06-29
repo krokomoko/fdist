@@ -14,8 +14,8 @@ type Distribution struct {
 }
 
 type Config struct {
-	K, Words, YWords int
-	Distance         float64
+	Words, YWords int
+	Distance      float64
 }
 
 func GetDistribution(conf *Config, x []float64, samples [][]float64) *Distribution {
@@ -46,27 +46,26 @@ func GetDistribution(conf *Config, x []float64, samples [][]float64) *Distributi
 
 	dist.Ymu = make([]float64, len(dist.Parameters[dist.cind].Words))
 
-	heap := NewHeap(conf.K)
-
-	var distance float64
+	var (
+		distance, mu float64
+		err          error
+	)
 	for i := range samples {
 		distance = dist.Distance(x, samples[i][:dist.cind])
 		if distance <= conf.Distance {
-			heap.Add(i, distance)
+			for wi, word := range dist.Parameters[dist.cind].Words {
+				mu, err = word.Mu(samples[i][dist.cind])
+				if err != nil {
+					panic(err)
+				}
+				dist.Ymu[wi] += mu
+			}
+			dist.Count++
 		}
 	}
 
-	var mu float64
-	for _, el := range *heap.Heap {
-		for wi, word := range dist.Parameters[dist.cind].Words {
-			mu, _ = word.Mu(samples[el.i][dist.cind])
-			dist.Ymu[wi] += mu
-		}
-	}
-
-	var depth = float64(heap.Heap.Len())
 	for wi := range dist.Parameters[dist.cind].Words {
-		dist.Ymu[wi] /= depth
+		dist.Ymu[wi] /= dist.Count
 	}
 
 	return &dist
